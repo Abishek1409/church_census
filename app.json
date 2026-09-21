@@ -4,13 +4,8 @@
     "slug": "church-census-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "splash": {
-      "image": "./assets/splash.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
-    },
+    "backgroundColor": "#6200ee",
     "assetBundlePatterns": [
       "**/*"
     ],
@@ -19,14 +14,25 @@
       "bundleIdentifier": "com.church.census"
     },
     "android": {
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
-      },
-      "package": "com.church.census"
+      "package": "com.church.census",
+      "backgroundColor": "#6200ee"
     },
-    "web": {
-      "favicon": "./assets/favicon.png"
-    }
+    "extra": {
+      "eas": {
+        "projectId": "72271bf5-3c11-44e4-a17f-20b4b84c5f77"
+      }
+    },
+    "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 34,
+            "targetSdkVersion": 34,
+            "buildToolsVersion": "34.0.0"
+          }
+        }
+      ]
+    ]
   }
 }
