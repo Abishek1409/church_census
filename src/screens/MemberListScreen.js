@@ -128,6 +128,11 @@ export default function MemberListScreen({ navigation }) {
       <Card.Content>
         <View style={styles.cardHeader}>
           <Text variant="titleLarge" style={styles.memberName}>{item.fullName}</Text>
+          {item.region && (
+            <Text variant="bodySmall" style={styles.regionBadge}>
+              📍 {item.region.name}
+            </Text>
+          )}
         </View>
         <View style={styles.cardDetails}>
           <Text variant="bodyMedium" style={styles.detailText} accessible={true} accessibilityLabel={`Phone number ${item.phoneNumber}`}>
@@ -352,6 +357,12 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: colors.text,
     fontSize: isSmallDevice() ? 18 : 20,
+  },
+  regionBadge: {
+    color: colors.primary,
+    marginTop: 4,
+    fontWeight: '500',
+    fontSize: isSmallDevice() ? 12 : 14,
   },
   cardDetails: {
     gap: 4,

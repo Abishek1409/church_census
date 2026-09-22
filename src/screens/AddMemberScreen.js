@@ -5,6 +5,8 @@ import { Formik } from 'formik';
 import * as Yup from 'yup';
 import { createMember, updateMember } from '../services/memberService';
 import { colors, spacing, elevation, borderRadius, animationDuration, isSmallDevice, commonStyles } from '../config/theme';
+import { useAuth } from '../contexts/AuthContext';
+import apiClient from '../config/api';
 
 // Validation schema using Yup
 const memberValidationSchema = Yup.object().shape({
@@ -55,6 +57,11 @@ const memberValidationSchema = Yup.object().shape({
   rationCardNumber: Yup.string()
     .required('Ration card number is required')
     .max(20, 'Ration card number must be less than 20 characters'),
+  
+  regionId: Yup.number()
+    .required('Region is required')
+    .positive('Please select a valid region')
+    .typeError('Region is required'),
 });
 
 export default function AddMemberScreen({ navigation, route }) {
@@ -62,8 +69,17 @@ export default function AddMemberScreen({ navigation, route }) {
   const editMode = route?.params?.member ? true : false;
   const memberToEdit = route?.params?.member;
 
+  // Get auth context
+  const { user, activeRegion } = useAuth();
+  const isAdmin = user?.role === 'ADMINISTRATOR';
+
   // State for housing type dropdown
   const [housingTypeMenuVisible, setHousingTypeMenuVisible] = useState(false);
+  
+  // State for region dropdown (administrators only)
+  const [regionMenuVisible, setRegionMenuVisible] = useState(false);
+  const [availableRegions, setAvailableRegions] = useState([]);
+  const [loadingRegions, setLoadingRegions] = useState(false);
   
   // State for loading and error handling
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -82,6 +98,33 @@ export default function AddMemberScreen({ navigation, route }) {
     }).start();
   }, []);
 
+  // Fetch regions for administrators
+  React.useEffect(() => {
+    if (isAdmin) {
+      fetchRegions();
+    }
+  }, [isAdmin]);
+
+  const fetchRegions = async () => {
+    try {
+      setLoadingRegions(true);
+      const response = await apiClient.get('/regions');
+      
+      if (response.data.success) {
+        setAvailableRegions(response.data.data);
+      }
+    } catch (error) {
+      console.error('Error fetching regions:', error);
+      Alert.alert(
+        'Error',
+        'Failed to load regions. Please try again.',
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setLoadingRegions(false);
+    }
+  };
+
   // Initial form values
   const initialValues = {
     fullName: memberToEdit?.fullName || '',
@@ -96,6 +139,8 @@ export default function AddMemberScreen({ navigation, route }) {
     income: memberToEdit?.income?.toString() || '',
     educationQualification: memberToEdit?.educationQualification || '',
     rationCardNumber: memberToEdit?.rationCardNumber || '',
+    // Region field - for field workers, auto-assign from activeRegion
+    regionId: memberToEdit?.regionId || (isAdmin ? '' : activeRegion?.id || ''),
   };
 
   const handleSubmit = async (values) => {
@@ -116,6 +161,7 @@ export default function AddMemberScreen({ navigation, route }) {
         income: parseFloat(values.income),
         educationQualification: values.educationQualification.trim(),
         rationCardNumber: values.rationCardNumber.trim(),
+        regionId: parseInt(values.regionId), // Include regionId
       };
 
       let response;
@@ -159,6 +205,13 @@ export default function AddMemberScreen({ navigation, route }) {
         } else if (error.response.status === 400) {
           // Validation error
           errorMessage = error.response.data?.message || 'Invalid data. Please check all fields.';
+        } else if (error.response.status === 403) {
+          // Region access denied
+          if (editMode) {
+            errorMessage = 'You do not have permission to edit this member. They may be in a region not assigned to you.';
+          } else {
+            errorMessage = 'You do not have permission to add members to this region.';
+          }
         } else if (error.response.status === 404) {
           // Member not found (for edit mode)
           errorMessage = 'Member not found. Please refresh and try again.';
@@ -168,6 +221,9 @@ export default function AddMemberScreen({ navigation, route }) {
       } else if (error.request) {
         // Network error
         errorMessage = 'Cannot reach server. Please check your internet connection.';
+      } else if (error.message) {
+        // Use error message if available
+        errorMessage = error.message;
       }
 
       // Show error alert
@@ -290,6 +346,81 @@ export default function AddMemberScreen({ navigation, route }) {
                 <HelperText type="error" visible={true} style={styles.errorText}>
                   {errors.subCaste}
                 </HelperText>
+              )}
+            </View>
+
+            {/* Region Information Section */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Region Assignment</Text>
+              <Divider style={styles.divider} />
+
+              {isAdmin ? (
+                // Administrators see a region dropdown picker
+                <>
+                  <View style={styles.dropdownContainer}>
+                    <Menu
+                      visible={regionMenuVisible}
+                      onDismiss={() => setRegionMenuVisible(false)}
+                      anchor={
+                        <TouchableOpacity
+                          onPress={() => setRegionMenuVisible(true)}
+                          activeOpacity={0.7}
+                        >
+                          <TextInput
+                            label="Region *"
+                            value={
+                              values.regionId
+                                ? availableRegions.find(r => r.id === values.regionId)?.name || ''
+                                : ''
+                            }
+                            mode="outlined"
+                            style={styles.input}
+                            editable={false}
+                            right={<TextInput.Icon icon="menu-down" />}
+                            error={touched.regionId && errors.regionId}
+                            pointerEvents="none"
+                          />
+                        </TouchableOpacity>
+                      }
+                    >
+                      {availableRegions.map((region) => (
+                        <Menu.Item
+                          key={region.id}
+                          onPress={() => {
+                            setFieldValue('regionId', region.id);
+                            setRegionMenuVisible(false);
+                          }}
+                          title={`${region.name} (${region.type})`}
+                        />
+                      ))}
+                    </Menu>
+                  </View>
+                  {touched.regionId && errors.regionId && (
+                    <HelperText type="error" visible={true} style={styles.errorText}>
+                      {errors.regionId}
+                    </HelperText>
+                  )}
+                  {loadingRegions && (
+                    <HelperText type="info" visible={true}>
+                      Loading regions...
+                    </HelperText>
+                  )}
+                </>
+              ) : (
+                // Field workers see their active region (read-only)
+                <>
+                  <TextInput
+                    label="Region *"
+                    value={activeRegion?.name || 'No active region'}
+                    mode="outlined"
+                    style={styles.input}
+                    editable={false}
+                    disabled
+                  />
+                  <HelperText type="info" visible={true}>
+                    Members will be assigned to your active region: {activeRegion?.name}
+                  </HelperText>
+                </>
               )}
             </View>
 

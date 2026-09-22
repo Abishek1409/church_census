@@ -50,9 +50,18 @@ export default function MemberDetailScreen({ navigation, route }) {
       console.error('Error fetching member details:', err);
       setError(err.message);
       
+      // Provide user-friendly messages based on error type
+      let errorTitle = 'Error';
+      let errorMessage = err.message;
+      
+      if (err.message.includes('permission') || err.message.includes('access')) {
+        errorTitle = 'Access Denied';
+        errorMessage = 'You do not have access to view this member. They may be in a region not assigned to you.';
+      }
+      
       Alert.alert(
-        'Error',
-        err.message,
+        errorTitle,
+        errorMessage,
         [
           {
             text: 'Retry',
@@ -94,7 +103,15 @@ export default function MemberDetailScreen({ navigation, route }) {
       );
     } catch (err) {
       console.error('Error deleting member:', err);
-      setError(err.message);
+      
+      // Provide user-friendly messages for specific error types
+      let errorMessage = err.message;
+      
+      if (err.message.includes('permission') || err.message.includes('access')) {
+        errorMessage = 'You do not have permission to delete this member. They may be in a region not assigned to you.';
+      }
+      
+      setError(errorMessage);
       setSnackbarVisible(true);
     } finally {
       setDeleting(false);
@@ -102,6 +119,8 @@ export default function MemberDetailScreen({ navigation, route }) {
   };
 
   const handleEdit = () => {
+    // Navigate to edit screen
+    // Note: Edit permission is checked server-side when the update is submitted
     navigation.navigate('AddMember', { member });
   };
 
@@ -177,6 +196,30 @@ export default function MemberDetailScreen({ navigation, route }) {
             </View>
           </Card.Content>
         </Card>
+
+        {/* Region Information Section */}
+        {member.region && (
+          <Card style={styles.card} accessible={true} accessibilityLabel="Region information section">
+            <Card.Content>
+              <Text style={styles.sectionTitle}>Region</Text>
+              <Divider style={styles.divider} />
+              
+              <View style={styles.infoRow}>
+                <Text style={styles.label}>Region Name:</Text>
+                <Text style={styles.value} accessible={true} accessibilityLabel={`Region name: ${member.region.name}`}>
+                  {member.region.name}
+                </Text>
+              </View>
+
+              <View style={styles.infoRow}>
+                <Text style={styles.label}>Region Type:</Text>
+                <Text style={styles.value}>
+                  {member.region.type}
+                </Text>
+              </View>
+            </Card.Content>
+          </Card>
+        )}
 
         {/* Housing Information Section */}
         <Card style={styles.card} accessible={true} accessibilityLabel="Housing information section">

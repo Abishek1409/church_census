@@ -1,5 +1,6 @@
 import axios from 'axios';
 import axiosRetry from 'axios-retry';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // TODO: Update this URL with your deployed Render.com backend URL
 // After completing Task 4 (Deploy backend to Render.com), replace this with your actual URL
@@ -35,11 +36,21 @@ axiosRetry(apiClient, {
   },
 });
 
-// Request interceptor
+// Request interceptor - Add auth token to all requests
 apiClient.interceptors.request.use(
-  (config) => {
-    // Add auth token here if needed in future
-    // config.headers.Authorization = `Bearer ${token}`;
+  async (config) => {
+    try {
+      // Retrieve token from AsyncStorage
+      const token = await AsyncStorage.getItem('authToken');
+      
+      // Add Authorization header if token exists
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+    } catch (error) {
+      console.error('Error retrieving auth token:', error);
+    }
+    
     return config;
   },
   (error) => {
@@ -48,7 +59,7 @@ apiClient.interceptors.request.use(
   }
 );
 
-// Response interceptor
+// Response interceptor - Handle auth errors and successful responses
 apiClient.interceptors.response.use(
   (response) => {
     // Log successful responses in development
@@ -57,15 +68,47 @@ apiClient.interceptors.response.use(
     }
     return response;
   },
-  (error) => {
+  async (error) => {
     // Enhanced error logging
     if (error.response) {
       // Server responded with error status
+      const status = error.response.status;
+      
       console.error('API Error:', {
-        status: error.response.status,
+        status: status,
         data: error.response.data,
         url: error.config?.url,
       });
+
+      // Handle authentication errors
+      if (status === 401) {
+        // Unauthorized - Token expired or invalid
+        console.log('401 Unauthorized: Clearing stored token');
+        
+        try {
+          // Clear stored token
+          await AsyncStorage.multiRemove(['authToken', 'user', 'activeRegion']);
+          
+          // Note: Navigation to LoginScreen will be handled by AuthContext
+          // The AuthContext will detect the cleared token and redirect appropriately
+        } catch (clearError) {
+          console.error('Error clearing auth data:', clearError);
+        }
+      } else if (status === 403) {
+        // Forbidden - Insufficient permissions or region access denied
+        console.log('403 Forbidden: Access denied');
+        
+        // Add user-friendly error message if not present
+        if (!error.response.data?.error?.message) {
+          error.response.data = {
+            ...error.response.data,
+            error: {
+              code: 'FORBIDDEN',
+              message: 'You do not have permission to access this resource.',
+            },
+          };
+        }
+      }
     } else if (error.request) {
       // Request made but no response received
       console.error('Network Error:', {

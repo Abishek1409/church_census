@@ -1,16 +1,19 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, StyleSheet, ScrollView, RefreshControl, Dimensions } from 'react-native';
-import { Button, Card, Title, Paragraph, Snackbar } from 'react-native-paper';
+import { Button, Card, Title, Paragraph, Snackbar, IconButton, Dialog, Portal } from 'react-native-paper';
 import LoadingScreen from '../components/LoadingScreen';
 import { getStats } from '../services/memberService';
+import { useAuth } from '../contexts/AuthContext';
 import { colors, spacing, elevation, borderRadius, animationDuration, isSmallDevice } from '../config/theme';
 
 export default function HomeScreen({ navigation }) {
+  const { user, activeRegion, logout } = useAuth();
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [snackbarVisible, setSnackbarVisible] = useState(false);
+  const [logoutDialogVisible, setLogoutDialogVisible] = useState(false);
 
   const fetchStats = async () => {
     try {
@@ -42,9 +45,28 @@ export default function HomeScreen({ navigation }) {
     fetchStats();
   };
 
+  const handleLogout = async () => {
+    setLogoutDialogVisible(false);
+    try {
+      await logout();
+      // Navigation will automatically redirect to Login screen
+    } catch (err) {
+      console.error('Logout error:', err);
+      setError('Logout failed. Please try again.');
+      setSnackbarVisible(true);
+    }
+  };
+
+  const handleRegionSelector = () => {
+    navigation.navigate('RegionSelector');
+  };
+
   if (loading) {
     return <LoadingScreen message="Loading dashboard..." />;
   }
+
+  // Determine if user has multiple regions
+  const hasMultipleRegions = user?.regions?.length > 1;
 
   return (
     <ScrollView
@@ -61,12 +83,76 @@ export default function HomeScreen({ navigation }) {
       accessible={true}
       accessibilityLabel="Dashboard scroll view"
     >
+      {/* User Info Card */}
+      <Card style={styles.userInfoCard}>
+        <Card.Content>
+          <View style={styles.userInfoHeader}>
+            <View style={styles.userInfoText}>
+              <Title style={styles.userName}>{user?.fullName || 'User'}</Title>
+              <Paragraph style={styles.userRole}>
+                {user?.role === 'ADMINISTRATOR' ? '👤 Administrator' : '👤 Field Worker'}
+              </Paragraph>
+            </View>
+            <IconButton
+              icon="logout"
+              iconColor={colors.error}
+              size={24}
+              onPress={() => setLogoutDialogVisible(true)}
+              accessibilityLabel="Logout"
+              accessibilityHint="Tap to logout from the application"
+            />
+          </View>
+          
+          {/* Active Region Display */}
+          {activeRegion && (
+            <View style={styles.regionContainer}>
+              <View style={styles.regionInfo}>
+                <Paragraph style={styles.regionLabel}>Active Region:</Paragraph>
+                <Title style={styles.regionName}>{activeRegion.name}</Title>
+                {activeRegion.type && (
+                  <Paragraph style={styles.regionType}>
+                    {activeRegion.type === 'VILLAGE' ? '🏘️' : activeRegion.type === 'TOWN' ? '🏙️' : '🏛️'} {activeRegion.type}
+                  </Paragraph>
+                )}
+              </View>
+              
+              {/* Change Region Button (only if multiple regions) */}
+              {hasMultipleRegions && (
+                <Button
+                  mode="outlined"
+                  onPress={handleRegionSelector}
+                  style={styles.changeRegionButton}
+                  icon="map-marker-radius"
+                  compact
+                  accessibilityLabel="Change Region"
+                  accessibilityHint="Tap to select a different region"
+                >
+                  Change Region
+                </Button>
+              )}
+            </View>
+          )}
+
+          {/* Display assigned regions for field workers */}
+          {user?.role === 'FIELD_WORKER' && user?.regions?.length > 0 && (
+            <View style={styles.assignedRegionsContainer}>
+              <Paragraph style={styles.assignedRegionsLabel}>
+                Assigned Regions: {user.regions.map(r => r.name).join(', ')}
+              </Paragraph>
+            </View>
+          )}
+        </Card.Content>
+      </Card>
+
       {/* Welcome Card */}
       <Card style={styles.welcomeCard}>
         <Card.Content>
-          <Title style={styles.title}>Welcome to Church Census</Title>
+          <Title style={styles.title}>Church Census Dashboard</Title>
           <Paragraph style={styles.subtitle}>
-            Manage church member information efficiently
+            {activeRegion 
+              ? `Statistics for ${activeRegion.name}`
+              : 'Manage church member information efficiently'
+            }
           </Paragraph>
         </Card.Content>
       </Card>
@@ -173,6 +259,35 @@ export default function HomeScreen({ navigation }) {
       >
         {error}
       </Snackbar>
+
+      {/* Logout Confirmation Dialog */}
+      <Portal>
+        <Dialog 
+          visible={logoutDialogVisible} 
+          onDismiss={() => setLogoutDialogVisible(false)}
+          accessibilityLabel="Logout Confirmation Dialog"
+        >
+          <Dialog.Title>Confirm Logout</Dialog.Title>
+          <Dialog.Content>
+            <Paragraph>Are you sure you want to logout?</Paragraph>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button 
+              onPress={() => setLogoutDialogVisible(false)}
+              accessibilityLabel="Cancel logout"
+            >
+              Cancel
+            </Button>
+            <Button 
+              onPress={handleLogout}
+              textColor={colors.error}
+              accessibilityLabel="Confirm logout"
+            >
+              Logout
+            </Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
     </ScrollView>
   );
 }
@@ -185,6 +300,72 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: spacing.md,
     paddingBottom: spacing.xxl,
+  },
+  userInfoCard: {
+    marginBottom: spacing.md,
+    elevation: elevation.md,
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.primaryLight,
+  },
+  userInfoHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: spacing.sm,
+  },
+  userInfoText: {
+    flex: 1,
+  },
+  userName: {
+    fontSize: isSmallDevice() ? 20 : 22,
+    fontWeight: 'bold',
+    color: colors.primary,
+    marginBottom: spacing.xs,
+  },
+  userRole: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    fontStyle: 'italic',
+  },
+  regionContainer: {
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.divider,
+  },
+  regionInfo: {
+    marginBottom: spacing.sm,
+  },
+  regionLabel: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    textTransform: 'uppercase',
+    marginBottom: spacing.xs,
+  },
+  regionName: {
+    fontSize: isSmallDevice() ? 18 : 20,
+    fontWeight: 'bold',
+    color: colors.primary,
+    marginBottom: spacing.xs,
+  },
+  regionType: {
+    fontSize: 13,
+    color: colors.textSecondary,
+  },
+  changeRegionButton: {
+    marginTop: spacing.sm,
+    borderColor: colors.primary,
+  },
+  assignedRegionsContainer: {
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.divider,
+  },
+  assignedRegionsLabel: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    lineHeight: 18,
   },
   welcomeCard: {
     marginBottom: spacing.md,
