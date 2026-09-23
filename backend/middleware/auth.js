@@ -107,9 +107,14 @@ const requireRole = (allowedRoles) => {
  * @param {Function} next - Express next middleware function
  */
 const checkRegionAccess = async (req, res, next) => {
+  console.log('=== checkRegionAccess START ===');
+  console.log('req.user exists?', !!req.user);
+  console.log('req.user:', req.user);
+  
   try {
     // Check if user is authenticated
     if (!req.user || !req.user.userId) {
+      console.log('❌ No req.user or userId - returning 401');
       return res.status(401).json({
         success: false,
         error: {
@@ -119,12 +124,18 @@ const checkRegionAccess = async (req, res, next) => {
       });
     }
 
+    console.log('✓ User authenticated:', req.user.role);
+
     // Administrators have access to all regions - skip region loading
     if (req.user.role === 'ADMINISTRATOR') {
+      console.log('✓ Administrator - skipping region queries');
       req.userRegions = []; // Empty array indicates all regions access
       req.userRegionsData = [];
+      console.log('✓ Calling next() for administrator');
       return next();
     }
+
+    console.log('Field worker - loading regions...');
 
     // For field workers, load assigned regions
     try {
@@ -133,6 +144,8 @@ const checkRegionAccess = async (req, res, next) => {
         where: { userId: req.user.userId },
         attributes: ['regionId', 'assignedAt']
       });
+
+      console.log('✓ UserRegion query succeeded, found:', userRegions.length);
 
       // Extract region IDs
       const regionIds = userRegions.map(ur => ur.regionId);
@@ -150,6 +163,8 @@ const checkRegionAccess = async (req, res, next) => {
           attributes: ['id', 'name', 'type']
         });
 
+        console.log('✓ Region query succeeded, found:', regions.length);
+
         req.userRegionsData = regions.map(r => ({
           id: r.id,
           name: r.name,
@@ -159,6 +174,7 @@ const checkRegionAccess = async (req, res, next) => {
         req.userRegionsData = [];
       }
 
+      console.log('✓ Calling next() for field worker');
       next();
     } catch (queryError) {
       // Log the actual database error
