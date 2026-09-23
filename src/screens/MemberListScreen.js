@@ -44,7 +44,14 @@ export default function MemberListScreen({ navigation }) {
       setLoading(true);
       setError('');
       const data = await getAllMembers();
-      setMembers(data);
+      console.log('=== DEBUG fetchMembers ===');
+      console.log('Raw API response:', JSON.stringify(data, null, 2));
+      console.log('Type of data:', typeof data);
+      console.log('data.data exists?', !!data.data);
+      console.log('data.data is array?', Array.isArray(data.data));
+      console.log('data.data length:', data.data?.length);
+      console.log('=========================');
+      setMembers(data.data || []);
     } catch (err) {
       console.error('Error fetching members:', err);
       setError(err.message);
@@ -59,7 +66,7 @@ export default function MemberListScreen({ navigation }) {
       setIsSearching(true);
       setError('');
       const data = await searchMembers(query);
-      setMembers(data);
+      setMembers(data.data || []);
     } catch (err) {
       console.error('Error searching members:', err);
       setError(err.message);
@@ -85,7 +92,7 @@ export default function MemberListScreen({ navigation }) {
       if (filterHousingType) filters.housingType = filterHousingType;
       
       const data = await filterMembers(filters);
-      setMembers(data);
+      setMembers(data.data || []);
       setActiveFilters(filterCommunity || filterHousingType);
     } catch (err) {
       console.error('Error filtering members:', err);

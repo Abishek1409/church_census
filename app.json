@@ -3,13 +3,10 @@
     "name": "Church Census",
     "slug": "church-census-mobile",
     "version": "1.0.0",
+    "sdkVersion": "57.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "backgroundColor": "#6200ee",
-    "splash": {
-      "resizeMode": "contain",
-      "backgroundColor": "#6200ee"
-    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.church.census"
@@ -22,6 +19,12 @@
       "eas": {
         "projectId": "72271bf5-3c11-44e4-a17f-20b4b84c5f77"
       }
-    }
+    },
+    "plugins": [
+      "expo-asset",
+      "expo-font",
+      "expo-splash-screen",
+      "expo-status-bar"
+    ]
   }
 }
