@@ -157,10 +157,12 @@ async function runMigration() {
       success: false,
       error: error.message
     };
-  } finally {
-    await sequelize.close();
-    console.log('Database connection closed');
   }
+  // Don't close connection when called from server startup
+  // finally {
+  //   await sequelize.close();
+  //   console.log('Database connection closed');
+  // }
 }
 
 // Run migration if executed directly
