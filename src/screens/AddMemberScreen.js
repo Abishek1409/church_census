@@ -58,8 +58,8 @@ const memberValidationSchema = Yup.object().shape({
     .required('Ration card number is required')
     .max(20, 'Ration card number must be less than 20 characters'),
   
+  // Region is required only for administrators
   regionId: Yup.number()
-    .required('Region is required')
     .positive('Please select a valid region')
     .typeError('Region is required'),
 });
@@ -139,8 +139,8 @@ export default function AddMemberScreen({ navigation, route }) {
     income: memberToEdit?.income?.toString() || '',
     educationQualification: memberToEdit?.educationQualification || '',
     rationCardNumber: memberToEdit?.rationCardNumber || '',
-    // Region field - for field workers, auto-assign from activeRegion
-    regionId: memberToEdit?.regionId || (isAdmin ? '' : activeRegion?.id || ''),
+    // Region field - only for administrators
+    ...(isAdmin && { regionId: memberToEdit?.regionId || '' }),
   };
 
   const handleSubmit = async (values) => {
@@ -161,7 +161,8 @@ export default function AddMemberScreen({ navigation, route }) {
         income: parseFloat(values.income),
         educationQualification: values.educationQualification.trim(),
         rationCardNumber: values.rationCardNumber.trim(),
-        regionId: parseInt(values.regionId), // Include regionId
+        // Include regionId only for administrators
+        ...(isAdmin && values.regionId && { regionId: parseInt(values.regionId) }),
       };
 
       let response;
@@ -349,80 +350,63 @@ export default function AddMemberScreen({ navigation, route }) {
               )}
             </View>
 
-            {/* Region Information Section */}
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Region Assignment</Text>
-              <Divider style={styles.divider} />
+            {/* Region Information Section - Administrators only */}
+            {isAdmin && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Region Assignment</Text>
+                <Divider style={styles.divider} />
 
-              {isAdmin ? (
-                // Administrators see a region dropdown picker
-                <>
-                  <View style={styles.dropdownContainer}>
-                    <Menu
-                      visible={regionMenuVisible}
-                      onDismiss={() => setRegionMenuVisible(false)}
-                      anchor={
-                        <TouchableOpacity
-                          onPress={() => setRegionMenuVisible(true)}
-                          activeOpacity={0.7}
-                        >
-                          <TextInput
-                            label="Region *"
-                            value={
-                              values.regionId
-                                ? availableRegions.find(r => r.id === values.regionId)?.name || ''
-                                : ''
-                            }
-                            mode="outlined"
-                            style={styles.input}
-                            editable={false}
-                            right={<TextInput.Icon icon="menu-down" />}
-                            error={touched.regionId && errors.regionId}
-                            pointerEvents="none"
-                          />
-                        </TouchableOpacity>
-                      }
-                    >
-                      {availableRegions.map((region) => (
-                        <Menu.Item
-                          key={region.id}
-                          onPress={() => {
-                            setFieldValue('regionId', region.id);
-                            setRegionMenuVisible(false);
-                          }}
-                          title={`${region.name} (${region.type})`}
+                {/* Administrators see a region dropdown picker */}
+                <View style={styles.dropdownContainer}>
+                  <Menu
+                    visible={regionMenuVisible}
+                    onDismiss={() => setRegionMenuVisible(false)}
+                    anchor={
+                      <TouchableOpacity
+                        onPress={() => setRegionMenuVisible(true)}
+                        activeOpacity={0.7}
+                      >
+                        <TextInput
+                          label="Region *"
+                          value={
+                            values.regionId
+                              ? availableRegions.find(r => r.id === values.regionId)?.name || ''
+                              : ''
+                          }
+                          mode="outlined"
+                          style={styles.input}
+                          editable={false}
+                          right={<TextInput.Icon icon="menu-down" />}
+                          error={touched.regionId && errors.regionId}
+                          pointerEvents="none"
                         />
-                      ))}
-                    </Menu>
-                  </View>
-                  {touched.regionId && errors.regionId && (
-                    <HelperText type="error" visible={true} style={styles.errorText}>
-                      {errors.regionId}
-                    </HelperText>
-                  )}
-                  {loadingRegions && (
-                    <HelperText type="info" visible={true}>
-                      Loading regions...
-                    </HelperText>
-                  )}
-                </>
-              ) : (
-                // Field workers see their active region (read-only)
-                <>
-                  <TextInput
-                    label="Region *"
-                    value={activeRegion?.name || 'No active region'}
-                    mode="outlined"
-                    style={styles.input}
-                    editable={false}
-                    disabled
-                  />
-                  <HelperText type="info" visible={true}>
-                    Members will be assigned to your active region: {activeRegion?.name}
+                      </TouchableOpacity>
+                    }
+                  >
+                    {availableRegions.map((region) => (
+                      <Menu.Item
+                        key={region.id}
+                        onPress={() => {
+                          setFieldValue('regionId', region.id);
+                          setRegionMenuVisible(false);
+                        }}
+                        title={`${region.name} (${region.type})`}
+                      />
+                    ))}
+                  </Menu>
+                </View>
+                {touched.regionId && errors.regionId && (
+                  <HelperText type="error" visible={true} style={styles.errorText}>
+                    {errors.regionId}
                   </HelperText>
-                </>
-              )}
-            </View>
+                )}
+                {loadingRegions && (
+                  <HelperText type="info" visible={true}>
+                    Loading regions...
+                  </HelperText>
+                )}
+              </View>
+            )}
 
             {/* Housing Information Section */}
             <View style={styles.section}>

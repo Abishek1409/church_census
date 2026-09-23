@@ -18,8 +18,9 @@ export default function HomeScreen({ navigation }) {
   const fetchStats = async () => {
     try {
       setError('');
-      const data = await getStats();
-      setStats(data);
+      const response = await getStats();
+      // The API returns { success: true, data: { totalMembers, housingBreakdown } }
+      setStats(response.data);
     } catch (err) {
       console.error('Error fetching stats:', err);
       setError(err.message);
@@ -33,6 +34,14 @@ export default function HomeScreen({ navigation }) {
   useEffect(() => {
     fetchStats();
   }, []);
+
+  // Re-fetch stats when screen comes into focus (after adding a member)
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      fetchStats();
+    });
+    return unsubscribe;
+  }, [navigation]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -176,21 +185,21 @@ export default function HomeScreen({ navigation }) {
               <View style={styles.breakdownRow}>
                 <Paragraph style={styles.breakdownLabel}>🏠 Owned:</Paragraph>
                 <Paragraph style={styles.breakdownValue}>
-                  {stats.housingTypeBreakdown?.Owned || 0}
+                  {stats.housingBreakdown?.Owned || 0}
                 </Paragraph>
               </View>
 
               <View style={styles.breakdownRow}>
                 <Paragraph style={styles.breakdownLabel}>🏘️ Rent:</Paragraph>
                 <Paragraph style={styles.breakdownValue}>
-                  {stats.housingTypeBreakdown?.Rent || 0}
+                  {stats.housingBreakdown?.Rent || 0}
                 </Paragraph>
               </View>
 
               <View style={styles.breakdownRow}>
                 <Paragraph style={styles.breakdownLabel}>🏛️ Government Provided:</Paragraph>
                 <Paragraph style={styles.breakdownValue}>
-                  {stats.housingTypeBreakdown?.['Government Provided'] || 0}
+                  {stats.housingBreakdown?.['Government Provided'] || 0}
                 </Paragraph>
               </View>
             </Card.Content>

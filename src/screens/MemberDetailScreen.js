@@ -44,8 +44,9 @@ export default function MemberDetailScreen({ navigation, route }) {
     try {
       setLoading(true);
       setError('');
-      const memberData = await getMemberById(memberId);
-      setMember(memberData);
+      const response = await getMemberById(memberId);
+      // The API returns { success: true, data: memberObject }
+      setMember(response.data);
     } catch (err) {
       console.error('Error fetching member details:', err);
       setError(err.message);
