@@ -7,9 +7,7 @@ exports.healthCheck = async (req, res) => {
     res.status(200).json({
       success: true,
       status: 'ok',
-      timestamp: new Date().toISOString(),
-      version: 'v2.0.0-middleware-debug', // Version marker
-      middlewareUpdated: true
+      timestamp: new Date().toISOString()
     });
   } catch (error) {
     res.status(500).json({
