@@ -616,6 +616,17 @@ exports.filterMembers = async (req, res) => {
 // Get statistics
 exports.getStats = async (req, res) => {
   try {
+    // Ensure req.user exists (should be set by authenticateToken middleware)
+    if (!req.user || !req.user.role) {
+      return res.status(401).json({
+        success: false,
+        error: {
+          code: 'UNAUTHORIZED',
+          message: 'Authentication required'
+        }
+      });
+    }
+
     // Build where clause based on user role
     const where = {};
     
