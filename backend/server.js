@@ -18,7 +18,14 @@ app.get('/', (req, res) => {
 
 // API Routes
 const apiRoutes = require('./routes/members');
+const authRoutes = require('./routes/auth');
+const userRoutes = require('./routes/users');
+const regionRoutes = require('./routes/regions');
+
 app.use('/api', apiRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/regions', regionRoutes);
 
 // Database connection and sync
 const startServer = async () => {
