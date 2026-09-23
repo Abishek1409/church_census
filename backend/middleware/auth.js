@@ -126,33 +126,54 @@ const checkRegionAccess = async (req, res, next) => {
     }
 
     // For field workers, load assigned regions
-    const userRegions = await UserRegion.findAll({
-      where: { userId: req.user.userId },
-      include: [{
-        model: Region,
-        as: 'region',
-        where: { isActive: true },
-        required: true
-      }]
-    });
+    try {
+      const userRegions = await UserRegion.findAll({
+        where: { userId: req.user.userId },
+        include: [{
+          model: Region,
+          as: 'region',
+          where: { isActive: true },
+          required: true
+        }]
+      });
 
-    // Extract region IDs
-    const regionIds = userRegions.map(ur => ur.regionId);
+      // Extract region IDs
+      const regionIds = userRegions.map(ur => ur.regionId);
 
-    // Attach region IDs to request for use in subsequent middleware/controllers
-    req.userRegions = regionIds;
+      // Attach region IDs to request for use in subsequent middleware/controllers
+      req.userRegions = regionIds;
 
-    // Also attach full region data for reference
-    req.userRegionsData = userRegions.map(ur => ({
-      id: ur.region.id,
-      name: ur.region.name,
-      type: ur.region.type,
-      assignedAt: ur.assignedAt
-    }));
+      // Also attach full region data for reference
+      req.userRegionsData = userRegions.map(ur => ({
+        id: ur.region.id,
+        name: ur.region.name,
+        type: ur.region.type,
+        assignedAt: ur.assignedAt
+      }));
 
-    next();
+      next();
+    } catch (queryError) {
+      // Log the actual database error
+      console.error('=== DATABASE ERROR IN checkRegionAccess ===');
+      console.error('Error name:', queryError.name);
+      console.error('Error message:', queryError.message);
+      console.error('Full error:', queryError);
+      console.error('=========================================');
+      
+      // Return a more helpful error
+      return res.status(500).json({
+        success: false,
+        error: {
+          code: 'DATABASE_ERROR',
+          message: 'Failed to load user region access',
+          details: queryError.message
+        }
+      });
+    }
   } catch (error) {
-    console.error('Error loading user regions:', error);
+    console.error('=== UNEXPECTED ERROR IN checkRegionAccess ===');
+    console.error('Error:', error);
+    console.error('==========================================');
     return res.status(500).json({
       success: false,
       error: {
