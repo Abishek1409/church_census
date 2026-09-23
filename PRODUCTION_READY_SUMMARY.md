@@ -22,24 +22,35 @@ All 7 tasks completed and verified. System is fully functional with region-based
 
 ## 🔐 Login Credentials
 
-### Administrator (Full Access)
-```
-Username: admin
-Password: Admin@123
-```
+**⚠️ SECURITY NOTICE:** Actual login credentials are stored in a separate file that is NOT committed to git.
 
-### Field Workers (6 regions available)
+### Getting Credentials
 
-| Region | Username | Password |
-|--------|----------|----------|
-| Krishnagiri | `Krishnagiri` | `Krishnagiri@123` |
-| Hosur | `Hosur` | `Hosur@123` |
-| Dharmapuri | `Dharmapuri` | `Dharmapuri@123` |
-| Kaveripattinam | `Kaveripattinam` | `Kaveripattinam@123` |
-| Denkanikottai | `Denkanikottai` | `Denkanikottai@123` |
-| Pochampalli | `Pochampalli` | `Pochampalli@123` |
+For actual login credentials, see:
+- `LOGIN_CREDENTIALS.txt` (on your local system, not in git)
+- Contact your system administrator
 
-**Pattern:** Username = Region name, Password = `<RegionName>@123`
+### Account Types
+
+**Administrator:**
+- Full access to all regions and members
+- Can create new regions and users
+- Username pattern: `admin`
+
+**Field Workers:**
+- Region-specific access only
+- Username pattern: Same as region name (e.g., `Krishnagiri`)
+- Password pattern: `<RegionName>@123` (change in production!)
+
+### Available Regions
+1. Krishnagiri
+2. Hosur
+3. Dharmapuri
+4. Kaveripattinam
+5. Denkanikottai
+6. Pochampalli
+
+**⚠️ Change all default passwords before production use!**
 
 ---
 
