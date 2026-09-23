@@ -122,19 +122,16 @@ const checkRegionAccess = async (req, res, next) => {
     // Administrators have access to all regions - skip region loading
     if (req.user.role === 'ADMINISTRATOR') {
       req.userRegions = []; // Empty array indicates all regions access
+      req.userRegionsData = [];
       return next();
     }
 
     // For field workers, load assigned regions
     try {
+      // Simplified query - just get regionIds without complex include
       const userRegions = await UserRegion.findAll({
         where: { userId: req.user.userId },
-        include: [{
-          model: Region,
-          as: 'region',
-          where: { isActive: true },
-          required: true
-        }]
+        attributes: ['regionId', 'assignedAt']
       });
 
       // Extract region IDs
@@ -143,13 +140,24 @@ const checkRegionAccess = async (req, res, next) => {
       // Attach region IDs to request for use in subsequent middleware/controllers
       req.userRegions = regionIds;
 
-      // Also attach full region data for reference
-      req.userRegionsData = userRegions.map(ur => ({
-        id: ur.region.id,
-        name: ur.region.name,
-        type: ur.region.type,
-        assignedAt: ur.assignedAt
-      }));
+      // If we need full region data, load it separately
+      if (regionIds.length > 0) {
+        const regions = await Region.findAll({
+          where: {
+            id: regionIds,
+            isActive: true
+          },
+          attributes: ['id', 'name', 'type']
+        });
+
+        req.userRegionsData = regions.map(r => ({
+          id: r.id,
+          name: r.name,
+          type: r.type
+        }));
+      } else {
+        req.userRegionsData = [];
+      }
 
       next();
     } catch (queryError) {
@@ -157,6 +165,7 @@ const checkRegionAccess = async (req, res, next) => {
       console.error('=== DATABASE ERROR IN checkRegionAccess ===');
       console.error('Error name:', queryError.name);
       console.error('Error message:', queryError.message);
+      console.error('SQL:', queryError.sql);
       console.error('Full error:', queryError);
       console.error('=========================================');
       
