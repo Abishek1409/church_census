@@ -40,6 +40,12 @@ const startServer = async () => {
     await db.sequelize.sync({ alter: true });
     console.log('✓ Database models synchronized');
 
+    // Run initial migration (creates admin user and regions if not exists)
+    console.log('Running initial migration...');
+    const runMigration = require('./migrations/001-initial-auth-setup');
+    await runMigration();
+    console.log('✓ Migration check completed');
+
     // Start server
     app.listen(PORT, () => {
       console.log(`✓ Server is running on port ${PORT}`);
