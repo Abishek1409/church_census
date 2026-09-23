@@ -43,17 +43,16 @@ export default function LoginScreen({ navigation }) {
 
   /**
    * Handle form submission
-   * Calls AuthContext login function and navigates to Home on success
+   * Calls AuthContext login function
+   * Navigation happens automatically via AuthContext state change
    */
   const handleLogin = async (values, { setSubmitting }) => {
     try {
       setLoginError('');
       
       // Call login function from AuthContext
+      // Navigation to Home will happen automatically when user state updates
       await login(values.username, values.password);
-      
-      // Navigate to Home on successful login
-      navigation.replace('Home');
     } catch (error) {
       // Display error message from AuthContext
       setLoginError(error.message || 'Login failed. Please try again.');
