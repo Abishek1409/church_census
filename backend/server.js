@@ -27,6 +27,8 @@ app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/regions', regionRoutes);
 
+console.log('✓ Routes registered: /api, /api/auth, /api/users, /api/regions');
+
 // Database connection and sync
 const startServer = async () => {
   try {
