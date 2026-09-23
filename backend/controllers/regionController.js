@@ -42,12 +42,19 @@ const updateRegionValidation = [
  * POST /api/regions
  * Create a new region
  * Requires ADMINISTRATOR role
+ * Automatically creates a field worker account with:
+ * - username = region name
+ * - password = <RegionName>@123
+ * - assigns the region to that user
  */
 const createRegion = async (req, res) => {
+  const transaction = await Region.sequelize.transaction();
+  
   try {
     // Validate input
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
+      await transaction.rollback();
       return res.status(400).json({
         success: false,
         error: {
@@ -59,13 +66,16 @@ const createRegion = async (req, res) => {
     }
 
     const { name, type, description } = req.body;
+    const trimmedName = name.trim();
 
     // Check for duplicate region name
     const existingRegion = await Region.findOne({
-      where: { name: { [Op.iLike]: name.trim() } }
+      where: { name: { [Op.iLike]: trimmedName } },
+      transaction
     });
 
     if (existingRegion) {
+      await transaction.rollback();
       return res.status(409).json({
         success: false,
         error: {
@@ -75,28 +85,74 @@ const createRegion = async (req, res) => {
       });
     }
 
+    // Check if username already exists
+    const existingUser = await User.findOne({
+      where: { username: trimmedName },
+      transaction
+    });
+
+    if (existingUser) {
+      await transaction.rollback();
+      return res.status(409).json({
+        success: false,
+        error: {
+          code: 'DUPLICATE_USERNAME',
+          message: 'A user with this region name as username already exists'
+        }
+      });
+    }
+
     // Create region
     const region = await Region.create({
-      name: name.trim(),
+      name: trimmedName,
       type,
       description: description ? description.trim() : null,
       isActive: true
-    });
+    }, { transaction });
+
+    // Create field worker account with username = region name, password = <RegionName>@123
+    const fieldWorkerPassword = `${trimmedName}@123`;
+    const fieldWorker = await User.create({
+      username: trimmedName,
+      password: fieldWorkerPassword, // will be hashed by User model hook
+      fullName: `${trimmedName} Field Worker`,
+      role: 'FIELD_WORKER',
+      isActive: true
+    }, { transaction });
+
+    // Assign the region to the field worker
+    await UserRegion.create({
+      userId: fieldWorker.id,
+      regionId: region.id,
+      assignedBy: req.user.userId
+    }, { transaction });
+
+    await transaction.commit();
 
     return res.status(201).json({
       success: true,
       data: {
-        id: region.id,
-        name: region.name,
-        type: region.type,
-        description: region.description,
-        isActive: region.isActive,
-        createdAt: region.createdAt
+        region: {
+          id: region.id,
+          name: region.name,
+          type: region.type,
+          description: region.description,
+          isActive: region.isActive,
+          createdAt: region.createdAt
+        },
+        fieldWorker: {
+          id: fieldWorker.id,
+          username: fieldWorker.username,
+          fullName: fieldWorker.fullName,
+          role: fieldWorker.role,
+          temporaryPassword: fieldWorkerPassword // Return password for admin to share with field worker
+        }
       },
-      message: 'Region created successfully'
+      message: 'Region and field worker account created successfully'
     });
 
   } catch (error) {
+    await transaction.rollback();
     console.error('Create region error:', error);
     return res.status(500).json({
       success: false,

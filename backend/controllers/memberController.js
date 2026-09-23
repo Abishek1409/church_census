@@ -105,6 +105,39 @@ const validateMemberData = (data, isUpdate = false) => {
 // Create new member
 exports.createMember = async (req, res) => {
   try {
+    // For FIELD_WORKER: auto-assign region from their assigned region (ignore req.body.regionId)
+    // For ADMINISTRATOR: use req.body.regionId
+    let regionId;
+    
+    if (req.user.role === 'FIELD_WORKER') {
+      // Field worker must have exactly one assigned region for member creation
+      if (!req.userRegions || req.userRegions.length === 0) {
+        return res.status(403).json({
+          success: false,
+          error: {
+            code: 'NO_ASSIGNED_REGION',
+            message: 'You do not have any assigned regions. Contact your administrator.'
+          }
+        });
+      }
+      
+      // Auto-assign to field worker's first (or only) assigned region
+      regionId = req.userRegions[0];
+    } else if (req.user.role === 'ADMINISTRATOR') {
+      // Administrator must provide regionId in request body
+      if (!req.body.regionId) {
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: 'Region ID is required',
+            details: [{ field: 'regionId', message: 'Region ID is required' }]
+          }
+        });
+      }
+      regionId = req.body.regionId;
+    }
+
     // Validate input
     const validationErrors = validateMemberData(req.body);
     if (validationErrors.length > 0) {
@@ -134,13 +167,27 @@ exports.createMember = async (req, res) => {
       });
     }
 
-    // Create member
-    const member = await Member.create(req.body);
+    // Create member with auto-assigned regionId
+    const memberData = {
+      ...req.body,
+      regionId // Override with server-determined regionId
+    };
+    
+    const member = await Member.create(memberData);
+
+    // Load member with region info
+    const memberWithRegion = await Member.findByPk(member.id, {
+      include: [{
+        model: require('../models').Region,
+        as: 'region',
+        attributes: ['id', 'name', 'type']
+      }]
+    });
 
     res.status(201).json({
       success: true,
       message: 'Member created successfully',
-      data: member
+      data: memberWithRegion
     });
   } catch (error) {
     console.error('Error creating member:', error);
@@ -174,7 +221,35 @@ exports.getAllMembers = async (req, res) => {
     const limit = parseInt(req.query.limit) || 20;
     const offset = (page - 1) * limit;
 
+    // Build where clause based on user role
+    const where = {};
+    
+    // If user is FIELD_WORKER, filter by assigned regions
+    if (req.user.role === 'FIELD_WORKER') {
+      if (!req.userRegions || req.userRegions.length === 0) {
+        // Field worker has no assigned regions
+        return res.status(200).json({
+          success: true,
+          data: [],
+          pagination: {
+            total: 0,
+            page,
+            limit,
+            totalPages: 0
+          }
+        });
+      }
+      where.regionId = { [Op.in]: req.userRegions };
+    }
+    // ADMINISTRATOR sees all members (no filter)
+
     const { count, rows } = await Member.findAndCountAll({
+      where,
+      include: [{
+        model: require('../models').Region,
+        as: 'region',
+        attributes: ['id', 'name', 'type']
+      }],
       limit,
       offset,
       order: [['createdAt', 'DESC']]
@@ -205,7 +280,13 @@ exports.getAllMembers = async (req, res) => {
 // Get single member by ID
 exports.getMemberById = async (req, res) => {
   try {
-    const member = await Member.findByPk(req.params.id);
+    const member = await Member.findByPk(req.params.id, {
+      include: [{
+        model: require('../models').Region,
+        as: 'region',
+        attributes: ['id', 'name', 'type']
+      }]
+    });
 
     if (!member) {
       return res.status(404).json({
@@ -216,6 +297,20 @@ exports.getMemberById = async (req, res) => {
         }
       });
     }
+
+    // Check region access for FIELD_WORKER
+    if (req.user.role === 'FIELD_WORKER') {
+      if (!member.regionId || !req.userRegions.includes(member.regionId)) {
+        return res.status(403).json({
+          success: false,
+          error: {
+            code: 'FORBIDDEN',
+            message: 'You do not have access to this member\'s region'
+          }
+        });
+      }
+    }
+    // ADMINISTRATOR can access any member
 
     res.status(200).json({
       success: true,
@@ -248,6 +343,31 @@ exports.updateMember = async (req, res) => {
         }
       });
     }
+
+    // Check region access for FIELD_WORKER
+    if (req.user.role === 'FIELD_WORKER') {
+      if (!member.regionId || !req.userRegions.includes(member.regionId)) {
+        return res.status(403).json({
+          success: false,
+          error: {
+            code: 'FORBIDDEN',
+            message: 'You do not have access to update this member\'s region'
+          }
+        });
+      }
+
+      // Prevent field workers from changing regionId
+      if (req.body.regionId && req.body.regionId !== member.regionId) {
+        return res.status(403).json({
+          success: false,
+          error: {
+            code: 'FORBIDDEN',
+            message: 'Field workers cannot reassign members to different regions. Contact an administrator.'
+          }
+        });
+      }
+    }
+    // ADMINISTRATOR can update any member and change regions
 
     // Validate input
     const validationErrors = validateMemberData(req.body, true);
@@ -286,10 +406,19 @@ exports.updateMember = async (req, res) => {
     // Update member
     await member.update(req.body);
 
+    // Load updated member with region info
+    const updatedMember = await Member.findByPk(member.id, {
+      include: [{
+        model: require('../models').Region,
+        as: 'region',
+        attributes: ['id', 'name', 'type']
+      }]
+    });
+
     res.status(200).json({
       success: true,
       message: 'Member updated successfully',
-      data: member
+      data: updatedMember
     });
   } catch (error) {
     console.error('Error updating member:', error);
@@ -331,6 +460,20 @@ exports.deleteMember = async (req, res) => {
       });
     }
 
+    // Check region access for FIELD_WORKER
+    if (req.user.role === 'FIELD_WORKER') {
+      if (!member.regionId || !req.userRegions.includes(member.regionId)) {
+        return res.status(403).json({
+          success: false,
+          error: {
+            code: 'FORBIDDEN',
+            message: 'You do not have access to delete this member\'s region'
+          }
+        });
+      }
+    }
+    // ADMINISTRATOR can delete any member
+
     await member.destroy();
 
     res.status(200).json({
@@ -364,12 +507,34 @@ exports.searchMembers = async (req, res) => {
       });
     }
 
+    // Build where clause with region filter
+    const where = {
+      fullName: {
+        [Op.iLike]: `%${query}%`
+      }
+    };
+
+    // Add region filter for FIELD_WORKER
+    if (req.user.role === 'FIELD_WORKER') {
+      if (!req.userRegions || req.userRegions.length === 0) {
+        // Field worker has no assigned regions
+        return res.status(200).json({
+          success: true,
+          data: [],
+          count: 0
+        });
+      }
+      where.regionId = { [Op.in]: req.userRegions };
+    }
+    // ADMINISTRATOR searches all regions (no filter)
+
     const members = await Member.findAll({
-      where: {
-        fullName: {
-          [Op.iLike]: `%${query}%`
-        }
-      },
+      where,
+      include: [{
+        model: require('../models').Region,
+        as: 'region',
+        attributes: ['id', 'name', 'type']
+      }],
       order: [['fullName', 'ASC']]
     });
 
@@ -396,6 +561,7 @@ exports.filterMembers = async (req, res) => {
     const { community, housingType } = req.query;
     const where = {};
 
+    // Add user-provided filters
     if (community) {
       where.community = community;
     }
@@ -404,8 +570,28 @@ exports.filterMembers = async (req, res) => {
       where.housingType = housingType;
     }
 
+    // Add region filter for FIELD_WORKER
+    if (req.user.role === 'FIELD_WORKER') {
+      if (!req.userRegions || req.userRegions.length === 0) {
+        // Field worker has no assigned regions
+        return res.status(200).json({
+          success: true,
+          data: [],
+          count: 0,
+          filters: { community, housingType }
+        });
+      }
+      where.regionId = { [Op.in]: req.userRegions };
+    }
+    // ADMINISTRATOR sees all regions (no region filter)
+
     const members = await Member.findAll({
       where,
+      include: [{
+        model: require('../models').Region,
+        as: 'region',
+        attributes: ['id', 'name', 'type']
+      }],
       order: [['fullName', 'ASC']]
     });
 
@@ -430,8 +616,31 @@ exports.filterMembers = async (req, res) => {
 // Get statistics
 exports.getStats = async (req, res) => {
   try {
+    // Build where clause based on user role
+    const where = {};
+    
+    // Add region filter for FIELD_WORKER
+    if (req.user.role === 'FIELD_WORKER') {
+      if (!req.userRegions || req.userRegions.length === 0) {
+        // Field worker has no assigned regions
+        return res.status(200).json({
+          success: true,
+          data: {
+            totalMembers: 0,
+            housingBreakdown: {
+              Rent: 0,
+              Owned: 0,
+              'Government Provided': 0
+            }
+          }
+        });
+      }
+      where.regionId = { [Op.in]: req.userRegions };
+    }
+    // ADMINISTRATOR gets stats for all regions (no filter)
+
     // Get total members count
-    const totalMembers = await Member.count();
+    const totalMembers = await Member.count({ where });
 
     // Get housing type breakdown
     const housingStats = await Member.findAll({
@@ -439,6 +648,7 @@ exports.getStats = async (req, res) => {
         'housingType',
         [require('sequelize').fn('COUNT', require('sequelize').col('id')), 'count']
       ],
+      where,
       group: ['housingType']
     });
 
